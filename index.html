@@ -2,7 +2,7 @@
 <html lang="zh-cn">
 <head>
 <meta charset="utf-8" />
-<title>ChatGPT 记忆提取器</title>
+<title>ChatGPT bio 记忆提取器</title>
 <style>
 *{box-sizing:border-box}
 body{font-family:system-ui, sans-serif;max-width:720px;margin:auto;padding:2rem}
@@ -18,7 +18,7 @@ footer{margin-top:2.5rem;font-size:.85rem;color:#888;text-align:center}
 </style>
 </head>
 <body>
-<h1>ChatGPT <code></code> 记忆提取器</h1>
+<h1>ChatGPT <code>bio</code> 记忆提取器</h1>
 
 <div class="dropzone" id="zone">
   <strong>拖拽 <code>conversations.json</code> 到这里<br>或点击选择文件</strong>
@@ -94,16 +94,30 @@ async function handleFile(file){
     `【时间】${new Date(m.ts*1000).toLocaleString()}\n`+
     `【内容】${m.parts}\n`+
     '-'.repeat(30)+'\n').join('');
-  bar.value=90;
+  bar.value=85;
 
-  /* 下载结果 */
+  /* 生成文件对象 */
   const blob = new Blob([out],{type:'text/plain;charset=utf-8'});
+  const fileObj = new File([blob],'extracted_bio_memories.txt',{type:blob.type});
+
+  /* 判断是否可以用系统分享 */
+  const iOSSafari = /iP(hone|ad|od).+Version\/[\d.]+.*Safari/i.test(navigator.userAgent);
+  if(iOSSafari && navigator.canShare && navigator.canShare({ files:[fileObj] })){
+    try{
+      await navigator.share({ files:[fileObj], title:'extracted_bio_memories' });
+      bar.value=100; setTimeout(()=>bar.style.display='none',800);
+      return;   // 分享成功就不再走下载链接
+    }catch(e){
+      /* 用户取消, 继续走下载 */
+    }
+  }
+
+  /* 其他环境 / 回退下载链接 */
   const url  = URL.createObjectURL(blob);
   const a    = Object.assign(document.createElement('a'),{
-    href:url,download:'extracted_bio_memories.txt'
+    href:url,download:fileObj.name
   });
   a.click(); URL.revokeObjectURL(url);
-
   bar.value=100; setTimeout(()=>bar.style.display='none',800);
 }
 </script>
