@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+<meta charset="utf-8" />
+<title>ChatGPT 记忆提取器</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui, sans-serif;max-width:720px;margin:auto;padding:2rem}
+h1{font-size:1.6rem;margin:0 0 1rem;line-height:1.3}
+.dropzone{
+  border:2px dashed #888;border-radius:8px;
+  padding:3rem 1rem;text-align:center;color:#666;
+  transition:.2s all;cursor:pointer;width:100%
+}
+.dropzone.dragover{border-color:#2962ff;background:#f5faff;color:#2962ff}
+#progress{width:100%;height:8px;margin-top:1rem;display:none}
+footer{margin-top:2.5rem;font-size:.85rem;color:#888;text-align:center}
+</style>
+</head>
+<body>
+<h1>ChatGPT <code></code> 记忆提取器</h1>
+
+<div class="dropzone" id="zone">
+  <strong>拖拽 <code>conversations.json</code> 到这里<br>或点击选择文件</strong>
+</div>
+<input type="file" id="fileInput" accept=".json" hidden />
+<progress id="progress" max="100" value="0"></progress>
+
+<footer>
+  Made&nbsp;with&nbsp;♥&nbsp;for&nbsp;User&nbsp;|&nbsp;Processing happens locally. Nothing is uploaded.
+</footer>
+
+<script>
+const zone = document.getElementById('zone');
+const fileInput = document.getElementById('fileInput');
+const bar  = document.getElementById('progress');
+
+/* 点击选择 */
+zone.addEventListener('click', () => fileInput.click());
+
+/* 拖拽高亮 */
+['dragover','dragenter'].forEach(evt=>{
+  zone.addEventListener(evt,e=>{e.preventDefault();zone.classList.add('dragover');});
+});
+['dragleave','drop'].forEach(evt=>{
+  zone.addEventListener(evt,()=>zone.classList.remove('dragover'));
+});
+
+/* 处理文件 */
+zone.addEventListener('drop',e=>{
+  e.preventDefault();
+  if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change',e=>{
+  if(e.target.files.length) handleFile(e.target.files[0]);
+});
+
+async function handleFile(file){
+  if(!file){return}
+  bar.style.display='block'; bar.value=0;
+
+  /* 读取文本 */
+  let text;
+  try{ text = await file.text(); }
+  catch{ alert('读取文件失败'); bar.style.display='none'; return; }
+  bar.value=20;
+
+  /* 解析 JSON，兼容 { conversations:[...] } */
+  let data;
+  try{
+    data = JSON.parse(text);
+    if(!Array.isArray(data) && Array.isArray(data.conversations)){ data = data.conversations; }
+  }catch(e){
+    alert('解析 JSON 失败：'+e.message); bar.style.display='none'; return;
+  }
+  if(!Array.isArray(data)){ alert('文件格式不符合预期'); bar.style.display='none'; return; }
+
+  /* 提取记忆 */
+  const memories = [];
+  data.forEach(conv=>{
+    Object.values(conv.mapping||{}).forEach(m=>{
+      const msg = m.message;
+      if(msg && msg.author?.role==='assistant' && msg.recipient==='bio'){
+        const parts = (msg.content?.parts||[]).filter(Boolean).join('\n').trim();
+        const ts    = msg.create_time;
+        if(parts && ts) memories.push({ts, parts});
+      }
+    });
+  });
+  bar.value=60;
+
+  memories.sort((a,b)=>a.ts-b.ts);
+  const out = memories.map(m=>
+    `【时间】${new Date(m.ts*1000).toLocaleString()}\n`+
+    `【内容】${m.parts}\n`+
+    '-'.repeat(30)+'\n').join('');
+  bar.value=90;
+
+  /* 下载结果 */
+  const blob = new Blob([out],{type:'text/plain;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'),{
+    href:url,download:'extracted_bio_memories.txt'
+  });
+  a.click(); URL.revokeObjectURL(url);
+
+  bar.value=100; setTimeout(()=>bar.style.display='none',800);
+}
+</script>
+</body>
+</html>
